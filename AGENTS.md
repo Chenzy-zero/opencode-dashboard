@@ -6,7 +6,7 @@ OpenCode Go 订阅额度跟踪工具：通过桌面宠物或置顶悬浮球快�
 
 ### Issue tracker
 
-Issues and specs live as markdown files under `.scratch/<feature>/` — no remote, no CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for `Chenzy-zero/opencode-dashboard`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
