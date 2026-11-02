@@ -47,7 +47,7 @@ export function createTray(handlers: TrayHandlers): Tray {
   const menu = Menu.buildFromTemplate([
     { label: '立即刷新', click: handlers.onRefresh },
     { type: 'separator' },
-    { label: '退出 OpenCode Dashboard', click: handlers.onQuit },
+    { label: '退出', click: handlers.onQuit },
   ])
   tray.on('click', (_event, bounds) => handlers.onToggle(bounds))
   tray.on('right-click', () => tray.popUpContextMenu(menu))
