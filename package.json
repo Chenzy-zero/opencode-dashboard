@@ -1,0 +1,29 @@
+{
+  "name": "opencode-dashboard",
+  "productName": "OpenCode Dashboard",
+  "version": "0.1.0",
+  "description": "OpenCode Go 订阅额度跟踪工具：在 macOS 菜单栏查看剩余额度",
+  "author": "Chenzy",
+  "license": "MIT",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "postinstall": "install-electron",
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'test/**/*.test.ts'",
+    "test:watch": "node --test --watch 'test/**/*.test.ts'",
+    "icons": "node scripts/generate-tray-icons.mjs",
+    "package": "npm run build && electron-builder --mac --x64"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.0",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5"
+  }
+}

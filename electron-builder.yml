@@ -1,0 +1,31 @@
+appId: com.chenzhiyong.opencode-dashboard
+productName: OpenCode Dashboard
+copyright: Copyright © 2026 Chenzy
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+
+extraResources:
+  # Template tray artwork must keep its file names (macOS treats "…Template" and
+  # the matching @2x file specially), so copy it next to the app resources as-is.
+  - from: resources
+    to: .
+
+asar: true
+
+mac:
+  target:
+    - target: dir
+      arch: [x64]
+  category: public.app-category.utilities
+  identity: null
+  hardenedRuntime: false
+  notarize: false
+  extendInfo:
+    LSUIElement: true
+    LSMinimumSystemVersion: "13.0"
