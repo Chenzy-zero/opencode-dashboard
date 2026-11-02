@@ -55,7 +55,8 @@ export function deriveTrayView(state: UsageResult): TrayView {
   }
 }
 
-function failureReason(status: 'offline' | 'unauthenticated' | 'error'): string {
+/** User-facing explanation for each non-online state. Shared with the panel. */
+export function failureReason(status: 'offline' | 'unauthenticated' | 'error'): string {
   switch (status) {
     case 'offline':
       return 'OpenCode 未运行'

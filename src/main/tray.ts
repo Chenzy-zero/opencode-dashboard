@@ -17,6 +17,8 @@ const TITLE_COLOUR: Partial<Record<TrayView['level'], string>> = {
 
 export type TrayHandlers = {
   iconPath: string
+  /** Left click: the tray icon is the panel's toggle. */
+  onToggle: (bounds: Electron.Rectangle) => void
   onRefresh: () => void
   onQuit: () => void
 }
@@ -38,13 +40,19 @@ export function createTray(handlers: TrayHandlers): Tray {
   const tray = new Tray(icon, TRAY_GUID)
   tray.setIgnoreDoubleClickEvents(true)
   tray.setToolTip('OpenCode Dashboard')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '立即刷新', click: handlers.onRefresh },
-      { type: 'separator' },
-      { label: '退出 OpenCode Dashboard', click: handlers.onQuit },
-    ]),
-  )
+
+  // Do not attach this with setContextMenu(): on macOS that makes the menu
+  // open on left click too and swallows the click-toggled panel. Right click
+  // pops the menu explicitly instead.
+  const menu = Menu.buildFromTemplate([
+    { label: '立即刷新', click: handlers.onRefresh },
+    { type: 'separator' },
+    { label: '退出 OpenCode Dashboard', click: handlers.onQuit },
+  ])
+  tray.on('click', (_event, bounds) => handlers.onToggle(bounds))
+  tray.on('right-click', () => tray.popUpContextMenu(menu))
+  console.log('[tray] click toggles the detail panel; right click opens the menu')
+
   return tray
 }
 
