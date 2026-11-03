@@ -4,6 +4,7 @@ import './style.css'
 type PanelApi = {
   onView: (callback: (view: PanelView) => void) => () => void
   hide: () => void
+  retry: () => void
 }
 
 const api = (window as unknown as { panelApi?: PanelApi }).panelApi
@@ -16,6 +17,9 @@ function mustElement<T extends Element>(selector: string): T {
 
 const rowsElement = mustElement<HTMLDivElement>('#rows')
 const statusElement = mustElement<HTMLDivElement>('#status')
+const statusReasonElement = mustElement<HTMLDivElement>('#status-reason')
+const statusHintElement = mustElement<HTMLParagraphElement>('#status-hint')
+const retryElement = mustElement<HTMLButtonElement>('#retry')
 const footerElement = mustElement<HTMLElement>('#footer')
 
 function renderRow(row: NonNullable<PanelView['rows']>[number]): HTMLElement {
@@ -66,14 +70,25 @@ function render(view: PanelView): void {
     rowsElement.hidden = false
     statusElement.hidden = true
   } else {
+    // Failure state: the reason names the problem, the hint names the next
+    // step, and 「重试」 re-runs the poll. All three strings come from core;
+    // no percentage is ever passed down here alongside a failure.
     rowsElement.replaceChildren()
     rowsElement.hidden = true
     statusElement.hidden = false
-    statusElement.textContent = view.statusText ?? '暂时拿不到额度'
+    statusReasonElement.textContent = view.statusText ?? '暂时拿不到额度'
+    statusHintElement.textContent = view.statusHint ?? ''
+    statusHintElement.hidden = !view.statusHint
+    retryElement.textContent = view.retryLabel ?? ''
+    retryElement.hidden = !view.retryLabel
   }
 
   footerElement.textContent = view.updatedAtText
 }
+
+retryElement.addEventListener('click', () => {
+  api?.retry()
+})
 
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') api?.hide()

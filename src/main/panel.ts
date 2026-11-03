@@ -22,6 +22,8 @@ export type Panel = {
   toggle: (anchor: Electron.Rectangle) => void
   hide: () => void
   update: (view: PanelView) => void
+  /** What the 「重试」 button does: one immediate refresh, no window changes. */
+  retry: () => void
   destroy: () => void
 }
 
@@ -30,6 +32,8 @@ export type PanelOptions = {
   onShow: () => void
   /** Called periodically while visible so countdowns never go stale. */
   onTick: () => void
+  /** 重试: shared with the tray menu's 「立即刷新」 in main/index.ts. */
+  onRetry: () => void
 }
 
 export function createPanel(options: PanelOptions): Panel {
@@ -119,6 +123,15 @@ export function createPanel(options: PanelOptions): Panel {
   const onHideRequest = (): void => hide('api')
   ipcMain.on('panel:hide', onHideRequest)
 
+  // 重试 is the only write the panel renderer can cause, and it is the same
+  // action as the tray menu's 「立即刷新」. The result is pushed back through
+  // the ordinary render path once the poll settles.
+  const requestRetry = (): void => {
+    console.log('[panel] retry requested')
+    options.onRetry()
+  }
+  ipcMain.on('panel:retry', requestRetry)
+
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (!app.isPackaged && devUrl) {
     void panel.loadURL(devUrl)
@@ -150,6 +163,8 @@ export function createPanel(options: PanelOptions): Panel {
 
     hide: () => hide('api'),
 
+    retry: requestRetry,
+
     update(view) {
       latestView = view
       const rows = view.rows ? view.rows.length : 0
@@ -160,6 +175,7 @@ export function createPanel(options: PanelOptions): Panel {
     destroy() {
       stopTicker()
       ipcMain.removeListener('panel:hide', onHideRequest)
+      ipcMain.removeListener('panel:retry', requestRetry)
       if (!panel.isDestroyed()) panel.destroy()
     },
   }

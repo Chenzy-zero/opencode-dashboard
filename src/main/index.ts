@@ -98,6 +98,9 @@ app.whenReady().then(() => {
       void refresh('panel')
     },
     onTick: renderPanel,
+    // Same scheduler entry point as the tray menu's 「立即刷新」: one code path,
+    // one tested cadence, and a success repaints the panel through render().
+    onRetry: () => scheduler?.trigger(),
   })
 
   scheduler = createRefreshScheduler({
@@ -147,7 +150,14 @@ app.whenReady().then(() => {
     setTimeout(() => {
       console.log('[smoke] invoking tray menu refresh path')
       scheduler?.trigger()
-    }, 4_500)
+    }, 5_000)
+
+    setTimeout(() => {
+      // Same entry point the renderer's 「重试」 button reaches over IPC.
+      // Spaced out so an in-flight manual poll cannot swallow it.
+      console.log('[smoke] invoking panel retry path')
+      panel?.retry()
+    }, 11_000)
   }
 })
 
