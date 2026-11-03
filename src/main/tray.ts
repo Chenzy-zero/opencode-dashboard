@@ -1,6 +1,8 @@
 import { Menu, Tray, nativeImage } from 'electron'
 
+import type { LoginItemView } from '../core/login-item.ts'
 import type { TrayView } from '../core/view-model.ts'
+import { trayMenuTemplate } from './tray-menu.ts'
 
 /**
  * Stable identity so macOS keeps the item in the same menu-bar slot across
@@ -23,6 +25,9 @@ export type TrayHandlers = {
   /** 「显示悬浮球」 is a checkbox; this reads the one source of truth. */
   isBallVisible: () => boolean
   onToggleBall: () => void
+  /** Fresh from the OS each time the menu opens; never a cached wish. */
+  loginItem: () => LoginItemView
+  onToggleLoginItem: () => void
   onQuit: () => void
 }
 
@@ -47,21 +52,20 @@ export function createTray(handlers: TrayHandlers): Tray {
   // Do not attach this with setContextMenu(): on macOS that makes the menu
   // open on left click too and swallows the click-toggled panel. Right click
   // pops the menu explicitly instead. The menu is rebuilt per open so the
-  // 显示悬浮球 checkbox always reflects the current state; the local reference
-  // keeps it alive while macOS displays it.
+  // 显示悬浮球 / 开机自启 checkboxes always reflect the current state; the local
+  // reference keeps it alive while macOS displays it.
   let openMenu: Menu | null = null
   const buildMenu = (): Menu =>
-    Menu.buildFromTemplate([
-      {
-        label: '显示悬浮球',
-        type: 'checkbox',
-        checked: handlers.isBallVisible(),
-        click: handlers.onToggleBall,
-      },
-      { label: '立即刷新', click: handlers.onRefresh },
-      { type: 'separator' },
-      { label: '退出', click: handlers.onQuit },
-    ])
+    Menu.buildFromTemplate(
+      trayMenuTemplate({
+        ballVisible: handlers.isBallVisible(),
+        loginItem: handlers.loginItem(),
+        onToggleBall: handlers.onToggleBall,
+        onRefresh: handlers.onRefresh,
+        onToggleLoginItem: handlers.onToggleLoginItem,
+        onQuit: handlers.onQuit,
+      }),
+    )
 
   tray.on('click', (_event, bounds) => handlers.onToggle(bounds))
   tray.on('right-click', () => {
