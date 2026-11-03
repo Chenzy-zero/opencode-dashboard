@@ -15,6 +15,10 @@ const panelApi = {
   hide(): void {
     ipcRenderer.send('panel:hide')
   },
+  /** 「重试」: ask the main process for an immediate refresh. */
+  retry(): void {
+    ipcRenderer.send('panel:retry')
+  },
 }
 
 contextBridge.exposeInMainWorld('panelApi', panelApi)

@@ -156,12 +156,51 @@ body {
 }
 
 .status {
-  padding: 16px 0 10px;
+  padding: 20px 2px 14px;
   border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.status-reason {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.status-hint {
+  margin: 6px 0 0;
   color: var(--muted);
   font-size: 12px;
-  text-align: center;
-  white-space: nowrap;
+  line-height: 17px;
+  text-wrap: pretty;
+}
+
+.retry {
+  margin-top: 13px;
+  padding: 5px 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--track);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.retry:active {
+  transform: scale(0.98);
+}
+
+.retry:focus-visible {
+  outline: 2px solid var(--fill);
+  outline-offset: 1px;
 }
 
 .footer {

@@ -12,7 +12,11 @@
         <span class="panel-subtitle">剩余额度</span>
       </header>
       <div id="rows" class="rows" hidden></div>
-      <div id="status" class="status">正在读取…</div>
+      <div id="status" class="status">
+        <div id="status-reason" class="status-reason">正在读取…</div>
+        <p id="status-hint" class="status-hint" hidden></p>
+        <button id="retry" class="retry" type="button" hidden>重试</button>
+      </div>
       <footer id="footer" class="footer">尚未更新</footer>
     </main>
     <script type="module" src="./src/main.ts"></script>

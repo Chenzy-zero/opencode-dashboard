@@ -76,16 +76,41 @@ export type PanelRow = {
  * Everything the renderer draws, already formatted.
  *
  * `rows` is null whenever no current numbers exist: showing an old percentage
- * next to `OpenCode 未运行` is exactly the mistake the spec forbids. Ticket #5
- * will extend the failure presentation from `status`/`statusText`.
+ * next to `OpenCode 未运行` is exactly the mistake the spec forbids.
  */
 export type PanelView = {
   status: UsageResult['status']
   rows: PanelRow[] | null
   /** Non-online reason (`OpenCode 未运行`, ...), null while online. */
   statusText: string | null
+  /**
+   * What the user can do about a failure. Distinct from `statusText`: the
+   * reason names the problem, the hint names the next step.
+   */
+  statusHint: string | null
+  /**
+   * 「重试」 while the panel has something to retry, null when it does not.
+   * Availability and button copy are one field so they cannot disagree.
+   */
+  retryLabel: string | null
   updatedAtText: string
   fetchedAt: number | null
+}
+
+/**
+ * Actionable advice per failure. 「未登录」 is not 「离线」: one means "start
+ * OpenCode", the other means "sign in inside OpenCode", so the wording must not
+ * collapse them.
+ */
+function failureHint(status: 'offline' | 'unauthenticated' | 'error'): string {
+  switch (status) {
+    case 'offline':
+      return '打开 OpenCode 桌面端后重试'
+    case 'unauthenticated':
+      return '在 OpenCode 里用 /connect 登录 Console 后重试'
+    case 'error':
+      return 'OpenCode 响应异常，稍后重试'
+  }
 }
 
 export type PanelViewInput = {
@@ -119,6 +144,8 @@ export function derivePanelView(input: PanelViewInput): PanelView {
       status: state.status,
       rows: null,
       statusText: failureReason(state.status),
+      statusHint: failureHint(state.status),
+      retryLabel: '重试',
       updatedAtText: formatUpdatedAt(input.lastFetchedAt, now),
       fetchedAt: input.lastFetchedAt,
     }
@@ -146,6 +173,8 @@ export function derivePanelView(input: PanelViewInput): PanelView {
     status: state.status,
     rows,
     statusText: null,
+    statusHint: null,
+    retryLabel: null,
     updatedAtText: formatUpdatedAt(state.fetchedAt, now),
     fetchedAt: state.fetchedAt,
   }
