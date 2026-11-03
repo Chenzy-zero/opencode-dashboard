@@ -1,6 +1,6 @@
 # opencode-dashboard
 
-OpenCode Go 订阅额度跟踪工具：通过桌面宠物或置顶悬浮球快速查看剩余额度。
+OpenCode Go 订阅额度跟踪工具：通过托盘图标或置顶悬浮球快速查看剩余额度。
 
 ## Agent skills
 

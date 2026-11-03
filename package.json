@@ -17,7 +17,8 @@
     "test:watch": "node --test --watch 'test/**/*.test.ts'",
     "icons": "node scripts/generate-tray-icons.mjs",
     "app-icon": "node scripts/generate-app-icon.mjs",
-    "package": "npm run build && electron-builder --mac --x64"
+    "package": "npm run build && electron-builder --mac --x64",
+    "install:app": "node scripts/install-app.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.9.0",
