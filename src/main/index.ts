@@ -1,12 +1,18 @@
-import { app, powerMonitor, type Tray } from 'electron'
+import { BrowserWindow, app, powerMonitor, screen, type Tray } from 'electron'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { resolveBallPosition } from '../core/ball-position.ts'
+import { DEFAULT_BALL_STATE, type BallState } from '../core/ball-state.ts'
+import { deriveBallView } from '../core/ball-view.ts'
 import { derivePanelView, type PanelView } from '../core/panel-view.ts'
 import { createRefreshScheduler, type RefreshReason } from '../core/refresh-scheduler.ts'
 import type { UsageResult } from '../core/types.ts'
 import { readUsage } from '../core/usage.ts'
 import { deriveTrayView } from '../core/view-model.ts'
+import { BALL_SIZE, createBall, type Ball } from './ball.ts'
 import { createPanel, type Panel } from './panel.ts'
+import { createBallStateStore } from './preferences.ts'
 import { applyTrayView, createTray } from './tray.ts'
 
 app.setName('OpenCode Dashboard')
@@ -16,6 +22,10 @@ type RefreshCause = RefreshReason | 'panel'
 
 let tray: Tray | null = null
 let panel: Panel | null = null
+let ball: Ball | null = null
+let ballStore: ReturnType<typeof createBallStateStore> | null = null
+let ballState: BallState = { ...DEFAULT_BALL_STATE }
+let ballTicker: ReturnType<typeof setInterval> | null = null
 let scheduler: ReturnType<typeof createRefreshScheduler> | null = null
 let polling = false
 
@@ -43,6 +53,23 @@ function renderPanel(): void {
   panel?.update(panelView())
 }
 
+function renderBall(): void {
+  ball?.update(deriveBallView({ state: latestState, now: Date.now() }))
+}
+
+/** Persists visibility and geometry together: one file, one source of truth. */
+function saveBallState(): void {
+  ballStore?.save(ballState)
+}
+
+function setBallVisible(visible: boolean): void {
+  ballState = { ...ballState, visible }
+  if (visible) ball?.show()
+  else ball?.hide()
+  saveBallState()
+  console.log(`[ball] visible=${visible}`)
+}
+
 function render(state: UsageResult): void {
   latestState = state
   if (state.status === 'online') lastFetchedAt = state.fetchedAt
@@ -56,9 +83,10 @@ function render(state: UsageResult): void {
     }
   }
 
-  // Keep the panel in lockstep: a failed poll clears its numbers instead of
-  // leaving yesterday's percentages on screen.
+  // Keep the panel and ball in lockstep: a failed poll clears their numbers
+  // instead of leaving yesterday's percentages on screen.
   renderPanel()
+  renderBall()
 }
 
 async function refresh(reason: RefreshCause): Promise<void> {
@@ -85,6 +113,45 @@ const togglePanel = (bounds: Electron.Rectangle): void => {
   panel?.toggle(bounds)
 }
 
+/**
+ * Dev-only: prove the ball's ring and number actually painted, and that the
+ * countdown fits its pill, without needing screen-recording permissions —
+ * capturePage reads the renderer's own surface.
+ */
+async function captureBallForSmoke(): Promise<void> {
+  const ballWindow = BrowserWindow.getAllWindows().find((window) =>
+    window.webContents.getURL().includes('ball.html'),
+  )
+  if (!ballWindow) {
+    console.log('[smoke] ball window not found for capture')
+    return
+  }
+
+  const metrics: unknown = await ballWindow.webContents.executeJavaScript(
+    `(() => {
+      const el = document.getElementById('countdown')
+      const rect = el.getBoundingClientRect()
+      return {
+        text: el.textContent,
+        clientWidth: el.clientWidth,
+        scrollWidth: el.scrollWidth,
+        fontSize: getComputedStyle(el).fontSize,
+        left: Math.round(rect.left),
+        width: Math.round(rect.width),
+        body: document.body.clientWidth,
+      }
+    })()`,
+  )
+  console.log('[smoke] ball countdown', JSON.stringify(metrics))
+
+  const image = await ballWindow.webContents.capturePage()
+  const target = join(app.getPath('temp'), 'opencode-dashboard-ball.png')
+  writeFileSync(target, image.toPNG())
+  console.log(
+    `[smoke] ball screenshot ${target} (${image.getSize().width}x${image.getSize().height})`,
+  )
+}
+
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.setActivationPolicy('accessory')
@@ -109,18 +176,63 @@ app.whenReady().then(() => {
     onTick: (reason) => void refresh(reason),
   })
 
+  ballStore = createBallStateStore(join(app.getPath('userData'), 'ball-state.json'))
+  ballState = ballStore.load()
+
+  const displays = screen.getAllDisplays().map((display) => ({
+    id: display.id,
+    workArea: display.workArea,
+  }))
+  const restored = resolveBallPosition(
+    ballState,
+    BALL_SIZE,
+    displays,
+    screen.getPrimaryDisplay().id,
+  )
+  ballState = { ...ballState, ...restored }
+
+  ball = createBall({
+    initialPosition: restored,
+    // A click on the ball opens the same detail panel as a tray click, placed
+    // next to the ball rather than under the menu bar.
+    onOpenPanel: togglePanel,
+    onGeometry: (geometry) => {
+      ballState = { ...ballState, ...geometry }
+      saveBallState()
+    },
+    // Identical entry point to the tray menu's 「立即刷新」.
+    onRefresh: () => scheduler?.trigger(),
+    onHide: () => setBallVisible(false),
+    onQuit: () => app.quit(),
+  })
+
+  // The countdown is minute-granular; repaint it even when no poll lands.
+  ballTicker = setInterval(renderBall, 30_000)
+
   tray = createTray({
     iconPath: trayIconPath(),
     onToggle: togglePanel,
     // The tray menu's 「立即刷新」 goes through the scheduler so the menu and
     // the interval share one code path (and one tested clock).
     onRefresh: () => scheduler?.trigger(),
+    isBallVisible: () => ballState.visible,
+    onToggleBall: () => setBallVisible(!ballState.visible),
     onQuit: () => app.quit(),
   })
 
   // Show the offline state until the first poll lands: never a made-up number.
   render(latestState)
   scheduler.start()
+
+  // Restore the ball's saved visibility. `show` waits for the renderer so an
+  // empty window never appears.
+  if (ballState.visible) ball.show()
+
+  // A monitor change must not strand the ball off-screen.
+  const reclamp = (): void => ball?.reclamp()
+  screen.on('display-added', reclamp)
+  screen.on('display-removed', reclamp)
+  screen.on('display-metrics-changed', reclamp)
 
   // macOS resume: fetch once right away, then resume the 60 s cadence. Only
   // `resume` counts as waking; `unlock-screen` fires far more often.
@@ -137,9 +249,10 @@ app.whenReady().then(() => {
     }, 1_500)
   }
 
-  // Dev smoke check for headless sessions: exercises the same toggle path a
-  // tray click uses and the same manual-refresh path the tray menu uses, logs
-  // the results, and leaves the app running normally.
+  // Dev smoke check for headless sessions: exercises the same paths the tray
+  // menu and a ball click take, logs the results, and leaves the app running
+  // normally. Screen gestures (hover, drag, snap, right-click menu) still need
+  // a human.
   if (!app.isPackaged && process.env['OPENCODE_DASHBOARD_SMOKE'] === '1') {
     setTimeout(() => {
       if (!tray || tray.isDestroyed()) return
@@ -158,12 +271,43 @@ app.whenReady().then(() => {
       console.log('[smoke] invoking panel retry path')
       panel?.retry()
     }, 11_000)
+
+    setTimeout(() => {
+      // The tray menu's 「显示悬浮球」 callbacks, without a pointer.
+      console.log('[smoke] toggling the ball on through the tray path')
+      setBallVisible(true)
+      console.log(`[smoke] ball visible=${ball?.isVisible()} state=${JSON.stringify(ballState)}`)
+    }, 14_000)
+
+    setTimeout(() => {
+      void captureBallForSmoke()
+    }, 15_500)
+
+    setTimeout(() => {
+      // A ball click: same handler the drag-end "no movement" branch calls.
+      console.log('[smoke] invoking ball click -> detail panel path')
+      if (ball) togglePanel(ball.bounds())
+    }, 17_000)
+
+    setTimeout(() => {
+      console.log('[smoke] toggling the ball off through the tray path')
+      setBallVisible(false)
+      console.log(`[smoke] ball visible=${ball?.isVisible()} state=${JSON.stringify(ballState)}`)
+    }, 20_000)
   }
 })
 
 app.on('before-quit', () => {
   scheduler?.stop()
   scheduler = null
+  if (ballTicker) {
+    clearInterval(ballTicker)
+    ballTicker = null
+  }
+  // Last chance to keep the ball where the user left it.
+  saveBallState()
+  ball?.destroy()
+  ball = null
   panel?.destroy()
   panel = null
 })

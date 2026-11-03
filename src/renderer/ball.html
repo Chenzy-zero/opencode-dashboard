@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCode Dashboard 悬浮球</title>
+  </head>
+  <body class="ball-body">
+    <main class="ball">
+      <div id="disc" class="ball-disc" role="img" aria-label="正在读取额度">
+        <svg class="ball-ring" viewBox="0 0 80 80" aria-hidden="true">
+          <circle class="ball-track" cx="40" cy="40" r="36" />
+          <circle id="ring" class="ball-progress" cx="40" cy="40" r="36" />
+        </svg>
+        <span id="value" class="ball-value">—</span>
+      </div>
+      <div id="countdown" class="ball-countdown" hidden></div>
+    </main>
+    <script type="module" src="./src/ball.ts"></script>
+  </body>
+</html>

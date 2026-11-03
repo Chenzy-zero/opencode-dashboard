@@ -20,6 +20,9 @@ export type TrayHandlers = {
   /** Left click: the tray icon is the panel's toggle. */
   onToggle: (bounds: Electron.Rectangle) => void
   onRefresh: () => void
+  /** 「显示悬浮球」 is a checkbox; this reads the one source of truth. */
+  isBallVisible: () => boolean
+  onToggleBall: () => void
   onQuit: () => void
 }
 
@@ -43,14 +46,28 @@ export function createTray(handlers: TrayHandlers): Tray {
 
   // Do not attach this with setContextMenu(): on macOS that makes the menu
   // open on left click too and swallows the click-toggled panel. Right click
-  // pops the menu explicitly instead.
-  const menu = Menu.buildFromTemplate([
-    { label: '立即刷新', click: handlers.onRefresh },
-    { type: 'separator' },
-    { label: '退出', click: handlers.onQuit },
-  ])
+  // pops the menu explicitly instead. The menu is rebuilt per open so the
+  // 显示悬浮球 checkbox always reflects the current state; the local reference
+  // keeps it alive while macOS displays it.
+  let openMenu: Menu | null = null
+  const buildMenu = (): Menu =>
+    Menu.buildFromTemplate([
+      {
+        label: '显示悬浮球',
+        type: 'checkbox',
+        checked: handlers.isBallVisible(),
+        click: handlers.onToggleBall,
+      },
+      { label: '立即刷新', click: handlers.onRefresh },
+      { type: 'separator' },
+      { label: '退出', click: handlers.onQuit },
+    ])
+
   tray.on('click', (_event, bounds) => handlers.onToggle(bounds))
-  tray.on('right-click', () => tray.popUpContextMenu(menu))
+  tray.on('right-click', () => {
+    openMenu = buildMenu()
+    tray.popUpContextMenu(openMenu)
+  })
   console.log('[tray] click toggles the detail panel; right click opens the menu')
 
   return tray
