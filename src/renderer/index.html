@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenCode Dashboard</title>
+  </head>
+  <body>
+    <main class="panel">
+      <header class="panel-header">
+        <span class="panel-title">OpenCode Go</span>
+        <span class="panel-meta">
+          <span id="refreshing" class="refreshing" data-active="false" aria-hidden="true"></span>
+          <span class="panel-subtitle">剩余额度</span>
+        </span>
+      </header>
+      <div id="rows" class="rows" hidden></div>
+      <div id="status" class="status">
+        <div id="status-reason" class="status-reason">正在读取…</div>
+        <p id="status-hint" class="status-hint" hidden></p>
+        <button id="retry" class="retry" type="button" hidden>重试</button>
+      </div>
+      <footer id="footer" class="footer">尚未更新</footer>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

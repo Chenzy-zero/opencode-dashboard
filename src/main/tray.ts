@@ -1,0 +1,85 @@
+import { Menu, Tray, nativeImage } from 'electron'
+
+import type { LoginItemView } from '../core/login-item.ts'
+import type { TrayView } from '../core/view-model.ts'
+import { devLog } from './log.ts'
+import { trayMenuTemplate } from './tray-menu.ts'
+
+/**
+ * Stable identity so macOS keeps the item in the same menu-bar slot across
+ * relaunches (Electron Tray guid, macOS).
+ */
+const TRAY_GUID = '7d0f3c9a-2b4e-4c61-8f5a-9e6b1d2c4a70'
+
+/** ANSI foreground colours are rendered by macOS status-item titles. */
+const TITLE_COLOUR: Partial<Record<TrayView['level'], string>> = {
+  warn: '\u001b[33m',
+  crit: '\u001b[31m',
+  muted: '\u001b[90m',
+}
+
+export type TrayHandlers = {
+  iconPath: string
+  /** Left click: the tray icon is the panel's toggle. */
+  onToggle: (bounds: Electron.Rectangle) => void
+  onRefresh: () => void
+  /** 「显示悬浮球」 is a checkbox; this reads the one source of truth. */
+  isBallVisible: () => boolean
+  onToggleBall: () => void
+  /** Fresh from the OS each time the menu opens; never a cached wish. */
+  loginItem: () => LoginItemView
+  onToggleLoginItem: () => void
+  onQuit: () => void
+}
+
+export function titleFor(view: TrayView): string {
+  const colour = TITLE_COLOUR[view.level]
+  return colour ? `${colour}${view.text}\u001b[0m` : view.text
+}
+
+export function createTray(handlers: TrayHandlers): Tray {
+  const icon = nativeImage.createFromPath(handlers.iconPath)
+  if (icon.isEmpty()) {
+    throw new Error(`tray icon not found at ${handlers.iconPath}`)
+  }
+  // The file name already ends in "Template"; set it explicitly so a future
+  // rename cannot silently turn the icon into a coloured (non-adapting) one.
+  icon.setTemplateImage(true)
+
+  const tray = new Tray(icon, TRAY_GUID)
+  tray.setIgnoreDoubleClickEvents(true)
+  tray.setToolTip('OpenCode Dashboard')
+
+  // Do not attach this with setContextMenu(): on macOS that makes the menu
+  // open on left click too and swallows the click-toggled panel. Right click
+  // pops the menu explicitly instead. The menu is rebuilt per open so the
+  // 显示悬浮球 / 开机自启 checkboxes always reflect the current state; the local
+  // reference keeps it alive while macOS displays it.
+  let openMenu: Menu | null = null
+  const buildMenu = (): Menu =>
+    Menu.buildFromTemplate(
+      trayMenuTemplate({
+        ballVisible: handlers.isBallVisible(),
+        loginItem: handlers.loginItem(),
+        onToggleBall: handlers.onToggleBall,
+        onRefresh: handlers.onRefresh,
+        onToggleLoginItem: handlers.onToggleLoginItem,
+        onQuit: handlers.onQuit,
+      }),
+    )
+
+  tray.on('click', (_event, bounds) => handlers.onToggle(bounds))
+  tray.on('right-click', () => {
+    openMenu = buildMenu()
+    tray.popUpContextMenu(openMenu)
+  })
+  devLog('[tray] click toggles the detail panel; right click opens the menu')
+
+  return tray
+}
+
+/** Applies a derived view to the menu-bar item. Only this shell knows colours. */
+export function applyTrayView(tray: Tray, view: TrayView): void {
+  tray.setTitle(titleFor(view), { fontType: 'monospacedDigit' })
+  tray.setToolTip(view.tooltip)
+}
