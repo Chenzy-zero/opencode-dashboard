@@ -35,8 +35,8 @@ export type LoginItemView = {
 const NOTICE_DEV = '开机自启仅对打包后的应用生效'
 const NOTICE_PLATFORM = '当前系统不支持开机自启'
 const NOTICE_APPROVAL = '需在「系统设置 › 通用 › 登录项」中允许'
-const NOTICE_NOT_REGISTERED = '系统未接受开机自启设置（未签名构建常见）'
-const NOTICE_MISMATCH = '开机自启未能生效（未签名构建常见）'
+const NOTICE_NOT_REGISTERED = '系统未接受开机自启设置（可在「系统设置 › 通用 › 登录项」中允许）'
+const NOTICE_MISMATCH = '开机自启未能生效（签名变更后常见，可在登录项中重新开启）'
 
 /** Derives what the menu should show from what the OS currently reports. */
 export function deriveLoginItemView(

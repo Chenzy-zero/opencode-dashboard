@@ -1,6 +1,12 @@
 import { app, powerMonitor, screen, type Tray } from 'electron'
 import { join } from 'node:path'
 
+import { installProcessGuards } from './console-guard.ts'
+import { diag, initDiagnostics } from './diagnostics.ts'
+
+initDiagnostics()
+installProcessGuards()
+
 import { resolveBallPosition } from '../core/ball-position.ts'
 import { DEFAULT_BALL_STATE, type BallState } from '../core/ball-state.ts'
 import { deriveBallView } from '../core/ball-view.ts'
@@ -23,6 +29,26 @@ import { createBallStateStore } from './preferences.ts'
 import { applyTrayView, createTray } from './tray.ts'
 
 app.setName('OpenCode Dashboard')
+
+// A second instance would create a second status item and race the first one's
+// preferences, so only the first launch survives.
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+diag('app.lock', { acquired: hasSingleInstanceLock })
+if (!hasSingleInstanceLock) app.quit()
+
+diag('app.start', { version: app.getVersion(), packaged: app.isPackaged })
+
+app.on('second-instance', () => diag('app.second-instance'))
+app.on('render-process-gone', (_event, contents, details) => {
+  diag('renderer.gone', {
+    url: contents.getURL(),
+    reason: details.reason,
+    exitCode: details.exitCode,
+  })
+})
+app.on('child-process-gone', (_event, details) => {
+  diag('child.gone', { type: details.type, reason: details.reason, exitCode: details.exitCode })
+})
 
 let tray: Tray | null = null
 let panel: Panel | null = null
@@ -112,10 +138,12 @@ async function pollUsage(reason: RefreshReason): Promise<UsageResult> {
 }
 
 const togglePanel = (bounds: Electron.Rectangle): void => {
+  diag('tray.click', bounds)
   panel?.toggle(bounds)
 }
 
 app.whenReady().then(() => {
+  if (!hasSingleInstanceLock) return
   if (process.platform === 'darwin') {
     app.setActivationPolicy('accessory')
   }
@@ -128,10 +156,10 @@ app.whenReady().then(() => {
     // Start/end of an in-flight poll: repaint the light indicator only.
     onChange: renderPanel,
     onError: (error, reason) => {
-      console.error(
-        `[usage] unexpected ${reason} refresh failure:`,
-        error instanceof Error ? error.message : error,
-      )
+      diag('usage.error', {
+        reason,
+        message: error instanceof Error ? error.message : String(error),
+      })
     },
   })
 
@@ -139,6 +167,7 @@ app.whenReady().then(() => {
     // Showing the panel is also a "give me current numbers" gesture, and the
     // 30 s tick keeps the countdown text from going stale while it stays open.
     onShow: () => {
+      diag('panel.show')
       renderPanel()
       scheduler?.trigger()
     },
@@ -147,6 +176,7 @@ app.whenReady().then(() => {
     // one tested cadence, and a success repaints the panel through render().
     onRetry: () => scheduler?.trigger(),
   })
+  diag('panel.create')
 
   scheduler = createRefreshScheduler({
     // `refresher` serialises requests: a tick during an in-flight poll becomes

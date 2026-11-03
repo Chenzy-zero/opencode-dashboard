@@ -52,7 +52,7 @@ test('a request macOS never registered does not show a checked box', () => {
 
   assert.equal(view.checked, false)
   assert.ok(view.notice, 'a silent failure must be surfaced')
-  assert.ok(view.notice.includes('未签名'), `expected the unsigned caveat, got ${view.notice}`)
+  assert.ok(view.notice.includes('登录项'), `expected the login-item hint, got ${view.notice}`)
 })
 
 test('an unknown login item is treated as not registered', () => {
@@ -100,7 +100,7 @@ test('a toggle macOS ignored produces a failure notice', () => {
   const notice = loginItemNotice(observed, true)
 
   assert.ok(notice)
-  assert.ok(notice.includes('未签名'), `expected the unsigned caveat, got ${notice}`)
+  assert.ok(notice.includes('登录项'), `expected the login-item hint, got ${notice}`)
 })
 
 test('a toggle macOS honoured produces no notice', () => {

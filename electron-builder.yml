@@ -26,7 +26,11 @@ mac:
       arch: [x64]
   category: public.app-category.utilities
   icon: build/icon.icns
-  identity: null
+  # Ad-hoc signature (`-`), not a Developer ID: no Apple account, no
+  # notarization. Unsigned Electron bundles crash their GPU/renderer children on
+  # macOS 14 (SIGTRAP in ElectronMain), and login items silently fail, so this
+  # is the minimum needed for a locally built app to run reliably.
+  identity: '-'
   hardenedRuntime: false
   notarize: false
   extendInfo:

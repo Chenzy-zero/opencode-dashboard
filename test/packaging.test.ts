@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -62,8 +62,8 @@ test('the packaged app is a menu-bar agent with no Dock slot', () => {
   assert.equal(builderConfig.mac?.extendInfo?.LSUIElement, true)
 })
 
-test('the build is unsigned and never notarized', () => {
-  assert.equal(builderConfig.mac?.identity, null)
+test('the build uses an ad-hoc signature and is never notarized', () => {
+  assert.equal(builderConfig.mac?.identity, '-')
   assert.equal(builderConfig.mac?.hardenedRuntime, false)
   assert.equal(builderConfig.mac?.notarize, false)
 })
@@ -150,6 +150,15 @@ test('the built bundle carries the agreed identity', () => {
   assert.equal(plist['CFBundleDisplayName'], APP_NAME)
   assert.equal(plist['CFBundleExecutable'], APP_NAME)
   assert.equal(plist['LSUIElement'], true)
+})
+
+test('the built bundle is ad-hoc signed so child processes can start', () => {
+  requireApp()
+  // `codesign -dv` prints its report on stderr. An unsigned bundle reports
+  // "code object is not signed at all"; ad-hoc reports "Signature=adhoc".
+  const result = spawnSync('codesign', ['-dv', APP_PATH], { encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(`${result.stdout}${result.stderr}`, /Signature=adhoc/)
 })
 
 test('the built bundle asks for no extra macOS permissions', () => {

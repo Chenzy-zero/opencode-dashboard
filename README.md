@@ -9,7 +9,7 @@ npm install
 npm run dev          # 启动菜单栏 app（electron-vite dev）
 npm test             # node --test，跑契约测试与单测（需要先 package）
 npm run build        # typecheck + 构建到 out/
-npm run package      # 本地未签名 .app（electron-builder，输出 release/）
+npm run package      # 本地 ad-hoc 签名的 .app（electron-builder，输出 release/）
 npm run install:app  # 构建（如需要）并安装到 /Applications
 ```
 
@@ -23,8 +23,19 @@ npm run install:app
 
 - 产物不存在时会先跑 `npm run package`，然后把 `release/mac/OpenCode Dashboard.app` 复制到 `/Applications/OpenCode Dashboard.app`；已有副本会被替换。
 - `/Applications` 不可写时会直接失败并说明原因，不会留下半份安装。
-- 安装完成后打开 Launchpad，搜索 `OpenCode Dashboard` 即可启动。本地构建的未签名 app 没有 quarantine 标记，双击不会被 Gatekeeper 拦截。
-- 未签名构建无法可靠写入 macOS 登录项，所以「开机自启」仍不可用（菜单里的提示保持原样）。如果以后需要它真正生效，只能自行用 ad-hoc 方式重新签名；默认构建不会替你切换签名方式。
+- 安装完成后打开 Launchpad，搜索 `OpenCode Dashboard` 即可启动。本地构建的 app 没有 quarantine 标记，双击不会被 Gatekeeper 拦截。
+- 构建使用 **ad-hoc 签名**（`identity: '-'`）：不需要 Apple 账号、不做公证。这是本地运行的必需项——未签名的 Electron 包在 macOS 14 上会让 GPU/渲染子进程在初始化阶段直接崩溃，主进程随后退出。
+- ad-hoc 签名下「开机自启」可以正常写入系统登录项；每次重新打包签名会变，macOS 可能要求重新勾选一次。
+
+## 诊断日志
+
+应用把启动、托盘点击、面板显示、渲染进程退出等事件写到：
+
+```
+~/Library/Application Support/OpenCode Dashboard/diagnostics.log
+```
+
+文件每次启动最多保留 256 KB。它不记录本地服务密码。
 
 ## 打包
 
@@ -45,8 +56,8 @@ open "release/mac/OpenCode Dashboard.app"
 托盘右键菜单「开机自启」直接读写 macOS 登录项（SMAppService），每次打开菜单都重新读 `app.getLoginItemSettings()`，勾选态只反映系统实际状态。
 
 - 开发模式（`npm run dev`）下该项是灰的：此时「应用」是 Electron.app，注册会把 Electron 自己加进登录项。
-- 系统没接受写入时（未签名构建的已知问题，见研究笔记 §7），菜单里会多出一行「开机自启未能生效（未签名构建常见）」，不会留一个假的勾。
-- 本机（macOS 14.8.9）实测：未签名构建写入后 `status` 始终是 `not-found`，ad-hoc 签名（`npx electron-builder --mac --x64 -c.mac.identity=-`）后立刻变成 `enabled`。默认构建仍保持未签名；需要开机自启真的生效时再考虑 ad-hoc，代价是每次重新打包签名都会变，可能要在菜单里重新开关一次。
+- 系统没接受写入时（例如签名变更后），菜单里会多出一行提示并指向「系统设置 › 通用 › 登录项」，不会留一个假的勾。
+- 本机（macOS 14.8.9）实测：未签名构建写入后 `status` 始终是 `not-found`；ad-hoc 签名后立刻变成 `enabled`。默认构建现在就是 ad-hoc，因此开机自启可用。每次重新打包签名会变，macOS 可能要求重新开关一次。
 - 诊断开关：`OPENCODE_DASHBOARD_LOGIN_PROBE=1 "release/mac/OpenCode Dashboard.app/Contents/MacOS/OpenCode Dashboard"`，会打印原始 `{openAtLogin,status}`、切换结果，并把状态还原。
 
 人工验收步骤：`npm run install:app` 装到 `/Applications`（登录项绑定 bundle 路径，换路径后要重新开关）→ 菜单里打开「开机自启」→ 在「系统设置 › 通用 › 登录项」确认 → 注销或重启，看菜单栏是否自动出现。
