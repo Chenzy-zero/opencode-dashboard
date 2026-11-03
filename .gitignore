@@ -5,3 +5,6 @@ out/
 release/
 build/icon.iconset/
 *.log
+.env
+.env.*
+*.local

@@ -7,7 +7,8 @@ OpenCode Go 订阅额度跟踪工具。常驻 macOS 菜单栏，直接显示 5 �
 ```bash
 npm install
 npm run dev          # 启动菜单栏 app（electron-vite dev）
-npm test             # node --test，跑契约测试与单测（需要先 package）
+npm test             # node --test，契约测试与单测（干净克隆可直接跑）
+npm run test:artifact # 打包产物检查（先 npm run package）
 npm run build        # typecheck + 构建到 out/
 npm run package      # 本地 ad-hoc 签名的 .app（electron-builder，输出 release/）
 npm run install:app  # 构建（如需要）并安装到 /Applications
