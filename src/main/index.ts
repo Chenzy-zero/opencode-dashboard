@@ -11,6 +11,7 @@ import type { UsageResult } from '../core/types.ts'
 import { readUsage } from '../core/usage.ts'
 import { deriveTrayView } from '../core/view-model.ts'
 import { BALL_SIZE, createBall, type Ball } from './ball.ts'
+import { createLoginItemController, type LoginItemController } from './login-item.ts'
 import { createPanel, type Panel } from './panel.ts'
 import { createBallStateStore } from './preferences.ts'
 import { applyTrayView, createTray } from './tray.ts'
@@ -152,6 +153,39 @@ async function captureBallForSmoke(): Promise<void> {
   )
 }
 
+/**
+ * Optional diagnostic for the one integration macOS hides: SMAppService has no
+ * error channel, so `setLoginItemSettings` can be accepted and then ignored.
+ * Run the packaged app with OPENCODE_DASHBOARD_LOGIN_PROBE=1 to see what this
+ * machine actually does; the probe toggles through the same controller the menu
+ * uses and toggles back afterwards.
+ */
+async function probeLoginItem(loginItem: LoginItemController): Promise<void> {
+  const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+  const raw = () => {
+    const settings = app.getLoginItemSettings()
+    return { openAtLogin: settings.openAtLogin, status: settings.status }
+  }
+
+  if (!app.isPackaged) {
+    console.log('[login] probe skipped: run the packaged app, not Electron.app')
+    return
+  }
+
+  const before = loginItem.view()
+  console.log('[login] probe before', JSON.stringify({ view: before, raw: raw() }))
+
+  const toggled = loginItem.toggle()
+  console.log('[login] probe toggled', JSON.stringify({ view: toggled, raw: raw() }))
+
+  // SMAppService settles asynchronously; give the OS a beat before believing it.
+  await delay(1_500)
+  console.log('[login] probe settled', JSON.stringify(raw()))
+
+  const restored = loginItem.toggle()
+  console.log('[login] probe restored', JSON.stringify({ view: restored, raw: raw() }))
+}
+
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.setActivationPolicy('accessory')
@@ -209,6 +243,16 @@ app.whenReady().then(() => {
   // The countdown is minute-granular; repaint it even when no poll lands.
   ballTicker = setInterval(renderBall, 30_000)
 
+  // SMAppService (macOS 13+) is the OS's record, not ours: the port is the whole
+  // of the app's contact with it, and every menu open reads it back.
+  const loginItem = createLoginItemController({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    read: () => app.getLoginItemSettings(),
+    write: (openAtLogin) => app.setLoginItemSettings({ openAtLogin }),
+  })
+  console.log('[login] startup', JSON.stringify(loginItem.view()))
+
   tray = createTray({
     iconPath: trayIconPath(),
     onToggle: togglePanel,
@@ -217,12 +261,21 @@ app.whenReady().then(() => {
     onRefresh: () => scheduler?.trigger(),
     isBallVisible: () => ballState.visible,
     onToggleBall: () => setBallVisible(!ballState.visible),
+    loginItem: () => loginItem.view(),
+    onToggleLoginItem: () => {
+      const view = loginItem.toggle()
+      // The OS status is the only evidence a login item exists; log it so a
+      // silent failure is visible without a debugger.
+      console.log('[login] toggled', JSON.stringify(view))
+    },
     onQuit: () => app.quit(),
   })
 
   // Show the offline state until the first poll lands: never a made-up number.
   render(latestState)
   scheduler.start()
+
+  if (process.env['OPENCODE_DASHBOARD_LOGIN_PROBE'] === '1') void probeLoginItem(loginItem)
 
   // Restore the ball's saved visibility. `show` waits for the renderer so an
   // empty window never appears.

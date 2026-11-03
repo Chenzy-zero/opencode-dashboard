@@ -18,11 +18,14 @@ extraResources:
 
 asar: true
 
+afterPack: scripts/after-pack.cjs
+
 mac:
   target:
     - target: dir
       arch: [x64]
   category: public.app-category.utilities
+  icon: build/icon.icns
   identity: null
   hardenedRuntime: false
   notarize: false
