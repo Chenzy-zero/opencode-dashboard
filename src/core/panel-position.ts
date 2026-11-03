@@ -1,12 +1,7 @@
-export type Rect = { x: number; y: number; width: number; height: number }
-export type Size = { width: number; height: number }
+import { clamp, type Rect, type Size } from './geometry.ts'
 
 const GAP = 4
 const MARGIN = 8
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
 
 /**
  * Places the panel under the tray icon, centred horizontally, then keeps it

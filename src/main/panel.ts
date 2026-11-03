@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import { panelPosition } from '../core/panel-position.ts'
 import type { PanelView } from '../core/panel-view.ts'
+import { devLog } from './log.ts'
 
 /** Frameless popover: three fixed rows never wrap at this width. */
 const PANEL_SIZE = { width: 340, height: 300 }
@@ -71,7 +72,7 @@ export function createPanel(options: PanelOptions): Panel {
   })
   panel.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
-  console.log('[panel] window created')
+  devLog('[panel] window created')
 
   let latestView: PanelView | null = null
   let lastHiddenAt = 0
@@ -92,7 +93,7 @@ export function createPanel(options: PanelOptions): Panel {
   const hide = (reason: 'api' | 'blur' | 'tray'): void => {
     if (!panel.isVisible()) return
     panel.hide()
-    console.log(`[panel] hide (${reason})`)
+    devLog(`[panel] hide (${reason})`)
   }
 
   panel.on('hide', () => {
@@ -116,7 +117,7 @@ export function createPanel(options: PanelOptions): Panel {
   }
 
   panel.webContents.on('did-finish-load', () => {
-    console.log('[panel] renderer loaded')
+    devLog('[panel] renderer loaded')
     sendLatest()
   })
 
@@ -127,7 +128,7 @@ export function createPanel(options: PanelOptions): Panel {
   // action as the tray menu's 「立即刷新」. The result is pushed back through
   // the ordinary render path once the poll settles.
   const requestRetry = (): void => {
-    console.log('[panel] retry requested')
+    devLog('[panel] retry requested')
     options.onRetry()
   }
   ipcMain.on('panel:retry', requestRetry)
@@ -157,7 +158,7 @@ export function createPanel(options: PanelOptions): Panel {
       panel.show()
       panel.focus()
       startTicker()
-      console.log(`[panel] show at ${x},${y}`)
+      devLog(`[panel] show at ${x},${y}`)
       options.onShow()
     },
 
@@ -168,7 +169,7 @@ export function createPanel(options: PanelOptions): Panel {
     update(view) {
       latestView = view
       const rows = view.rows ? view.rows.length : 0
-      console.log(`[panel] update status=${view.status} rows=${rows}`)
+      devLog(`[panel] update status=${view.status} rows=${rows}`)
       sendLatest()
     },
 

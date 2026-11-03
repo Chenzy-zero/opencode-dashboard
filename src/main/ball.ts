@@ -8,6 +8,7 @@ import {
   type ResolvedBallPosition,
 } from '../core/ball-position.ts'
 import type { BallView } from '../core/ball-view.ts'
+import { devLog } from './log.ts'
 
 /**
  * Window size in DIP. The renderer's CSS uses the same box, so the disc and
@@ -137,7 +138,7 @@ export function createBall(options: BallOptions): Ball {
     const { x, y } = snapToNearestEdge(bounds, workArea)
     // No animation: the persisted geometry must be the geometry on screen.
     window.setPosition(x, y, false)
-    console.log(`[ball] snap -> ${x},${y}`)
+    devLog(`[ball] snap -> ${x},${y}`)
     report()
   }
 
@@ -146,7 +147,7 @@ export function createBall(options: BallOptions): Ball {
     dragStartCursor = screen.getCursorScreenPoint()
     dragStartBounds = window.getBounds()
     dragged = false
-    console.log('[ball] drag start')
+    devLog('[ball] drag start')
 
     dragTimer = setInterval(() => {
       if (window.isDestroyed()) {
@@ -169,7 +170,7 @@ export function createBall(options: BallOptions): Ball {
   const endDrag = (): void => {
     if (dragTimer === null) return
     stopDrag()
-    console.log(`[ball] drag end (${dragged ? 'moved' : 'click'})`)
+    devLog(`[ball] drag end (${dragged ? 'moved' : 'click'})`)
 
     if (!dragged) {
       // A click is "pointer went down and up without travelling": no separate
@@ -189,7 +190,7 @@ export function createBall(options: BallOptions): Ball {
     window.hide()
     // Keep the saved position truthful even if the ball was hidden mid-drag.
     report()
-    console.log('[ball] hide')
+    devLog('[ball] hide')
   }
 
   const showNow = (): void => {
@@ -202,7 +203,7 @@ export function createBall(options: BallOptions): Ball {
     // showInactive plus focusable:false: appearing never steals the keystroke.
     window.showInactive()
     const { x, y } = window.getBounds()
-    console.log(`[ball] show at ${x},${y}`)
+    devLog(`[ball] show at ${x},${y}`)
   }
 
   const show = (): void => {
@@ -210,7 +211,7 @@ export function createBall(options: BallOptions): Ball {
     // Restoring a saved "visible" must not flash an empty window before the
     // renderer has drawn the ring.
     if (!rendererReady) {
-      console.log('[ball] show deferred until the renderer is ready')
+      devLog('[ball] show deferred until the renderer is ready')
       return
     }
     showNow()
@@ -233,7 +234,7 @@ export function createBall(options: BallOptions): Ball {
 
   const onContextMenu = (): void => {
     if (dragTimer !== null) return
-    console.log('[ball] context menu')
+    devLog('[ball] context menu')
     menu.popup({ window })
   }
 
@@ -248,7 +249,7 @@ export function createBall(options: BallOptions): Ball {
   }
 
   window.webContents.on('did-finish-load', () => {
-    console.log('[ball] renderer loaded')
+    devLog('[ball] renderer loaded')
     rendererReady = true
     sendLatest()
     if (showRequested) showNow()
@@ -261,7 +262,7 @@ export function createBall(options: BallOptions): Ball {
     void window.loadFile(join(__dirname, '../renderer/ball.html'))
   }
 
-  console.log(`[ball] window created at ${options.initialPosition.x},${options.initialPosition.y}`)
+  devLog(`[ball] window created at ${options.initialPosition.x},${options.initialPosition.y}`)
 
   return {
     show,
@@ -282,7 +283,7 @@ export function createBall(options: BallOptions): Ball {
       const { workArea } = screen.getDisplayMatching(bounds)
       const { x, y } = clampToWorkArea(bounds, BALL_SIZE, workArea)
       if (x !== bounds.x || y !== bounds.y) {
-        console.log(`[ball] reclamp ${bounds.x},${bounds.y} -> ${x},${y}`)
+        devLog(`[ball] reclamp ${bounds.x},${bounds.y} -> ${x},${y}`)
         window.setPosition(x, y, false)
         report()
       }

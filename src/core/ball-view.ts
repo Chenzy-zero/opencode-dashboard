@@ -1,20 +1,26 @@
 import { formatCountdown } from './panel-view.ts'
-import type { UsageResult } from './types.ts'
-import { failureReason, remainingPercent, trayLevel, type TrayLevel } from './view-model.ts'
+import type { UsageState } from './types.ts'
+import {
+  failureReason,
+  fiveHourSummary,
+  trayLevel,
+  type TrayLevel,
+} from './view-model.ts'
 
 /**
  * Everything the floating ball draws.
  *
  * It is the tray's number in a bigger shape: same 5-hour window, same colour
- * tiers, same `—` for every non-online state. `progress` is the ring fill, and
- * it is 0 whenever the ball shows `—` so no stale arc can survive a failure.
+ * tiers, same `—` for every failed state and `…` before the first poll settles.
+ * `progress` is the ring fill, and it is 0 whenever the ball shows `—` or `…`
+ * so no stale arc can survive a failure.
  */
 export type BallView = {
-  status: UsageResult['status']
-  /** `87%` while online, `—` otherwise. */
+  status: UsageState['status']
+  /** `87%` while online, `—`/`…` otherwise. */
   text: string
   level: TrayLevel
-  /** Ring fill, 0–100. Zero whenever `text` is `—`. */
+  /** Ring fill, 0–100. Zero whenever there is no live number. */
   progress: number
   /** Reset countdown for the 5-hour window; null when there is no number. */
   countdown: string | null
@@ -23,13 +29,24 @@ export type BallView = {
 }
 
 export type BallViewInput = {
-  state: UsageResult
+  state: UsageState
   now: number
 }
 
 /** Derives the ball from the newest poll result. Pure. */
 export function deriveBallView(input: BallViewInput): BallView {
   const { state, now } = input
+
+  if (state.status === 'loading') {
+    return {
+      status: state.status,
+      text: '…',
+      level: 'muted',
+      progress: 0,
+      countdown: null,
+      tooltip: 'OpenCode Go · 正在读取…',
+    }
+  }
 
   if (state.status !== 'online') {
     const reason = failureReason(state.status)
@@ -43,12 +60,8 @@ export function deriveBallView(input: BallViewInput): BallView {
     }
   }
 
-  const { rolling, weekly, monthly } = state.snapshot
-  // The ball is the 5-hour window only. The other two windows still matter for
-  // the colour: a rate-limited window anywhere means requests are being refused.
-  const remaining = remainingPercent(rolling.percent)
-  const anyLimited = rolling.limited || weekly.limited || monthly.limited
-  const countdown = formatCountdown(rolling.resetsAt - now)
+  const { remaining, anyLimited } = fiveHourSummary(state.snapshot)
+  const countdown = formatCountdown(state.snapshot.rolling.resetsAt - now)
 
   return {
     status: state.status,

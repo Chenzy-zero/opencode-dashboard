@@ -1,4 +1,5 @@
-import type { UsageResult, UsageSnapshot } from './types.ts'
+import type { UsageSnapshot, UsageState } from './types.ts'
+import { formatUpdatedAt } from './updated-at.ts'
 import { failureReason, remainingPercent } from './view-model.ts'
 
 const MINUTE = 60_000
@@ -58,11 +59,10 @@ export type PanelRow = {
   key: WindowKey
   /** `5 小时窗口`, `周窗口`, `月窗口`. */
   name: string
-  /** 剩余额度, rounded to a whole percent. */
-  remaining: number
-  remainingText: string
-  /** Same 0–100 value, ready for the bar width. */
-  progress: number
+  /** 剩余额度, rounded to a whole percent; also the bar width. */
+  percent: number
+  /** `${percent}%`, the only formatted copy of the same number. */
+  percentText: string
   limited: boolean
   /** `已限流` when limited, otherwise null. */
   limitedText: string | null
@@ -79,7 +79,7 @@ export type PanelRow = {
  * next to `OpenCode 未运行` is exactly the mistake the spec forbids.
  */
 export type PanelView = {
-  status: UsageResult['status']
+  status: UsageState['status']
   rows: PanelRow[] | null
   /** Non-online reason (`OpenCode 未运行`, ...), null while online. */
   statusText: string | null
@@ -95,6 +95,11 @@ export type PanelView = {
   retryLabel: string | null
   updatedAtText: string
   fetchedAt: number | null
+  /**
+   * True while a poll is in flight. The shell shows a small indicator but keeps
+   * the existing rows on screen; a refresh never blanks the numbers.
+   */
+  isRefreshing: boolean
 }
 
 /**
@@ -114,30 +119,34 @@ function failureHint(status: 'offline' | 'unauthenticated' | 'error'): string {
 }
 
 export type PanelViewInput = {
-  state: UsageResult
+  state: UsageState
   now: number
   /** Last successful fetch, retained while the app is offline/erroring. */
   lastFetchedAt: number | null
-}
-
-function formatUpdatedAt(fetchedAt: number | null, now: number): string {
-  if (fetchedAt === null) return '尚未更新'
-
-  const age = Math.max(0, now - fetchedAt)
-  if (age < MINUTE) return '最后更新 刚刚'
-
-  const minutes = Math.floor(age / MINUTE)
-  if (minutes < 60) return `最后更新 ${minutes} 分钟前`
-
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `最后更新 ${hours} 小时前`
-
-  return `最后更新 ${Math.floor(hours / 24)} 天前`
+  /** A poll is in flight; draw the indicator, keep the numbers. */
+  isRefreshing?: boolean
 }
 
 /** Derives the whole panel from the newest poll result. Pure. */
 export function derivePanelView(input: PanelViewInput): PanelView {
   const { state, now } = input
+  const isRefreshing = input.isRefreshing === true
+
+  if (state.status === 'loading') {
+    // Before the first poll settles there is no reason to name: saying
+    // 「OpenCode 未运行」 here would be a guess, and a retry would do nothing
+    // that the startup poll is not already doing.
+    return {
+      status: state.status,
+      rows: null,
+      statusText: '正在读取…',
+      statusHint: null,
+      retryLabel: null,
+      updatedAtText: formatUpdatedAt(input.lastFetchedAt, now),
+      fetchedAt: input.lastFetchedAt,
+      isRefreshing,
+    }
+  }
 
   if (state.status !== 'online') {
     return {
@@ -148,22 +157,21 @@ export function derivePanelView(input: PanelViewInput): PanelView {
       retryLabel: '重试',
       updatedAtText: formatUpdatedAt(input.lastFetchedAt, now),
       fetchedAt: input.lastFetchedAt,
+      isRefreshing,
     }
   }
 
   const rows = WINDOWS.map(({ key, name }): PanelRow => {
     const window = state.snapshot[key]
-    const remaining = remainingPercent(window.percent)
-    const resetCountdown = formatCountdown(window.resetsAt - now)
+    const percent = remainingPercent(window.percent)
     return {
       key,
       name,
-      remaining,
-      remainingText: `${remaining}%`,
-      progress: remaining,
+      percent,
+      percentText: `${percent}%`,
       limited: window.limited,
       limitedText: window.limited ? '已限流' : null,
-      resetCountdown,
+      resetCountdown: formatCountdown(window.resetsAt - now),
       resetAbsolute: formatClock(window.resetsAt),
       resetText: formatResetText(window.resetsAt, now),
     }
@@ -177,5 +185,6 @@ export function derivePanelView(input: PanelViewInput): PanelView {
     retryLabel: null,
     updatedAtText: formatUpdatedAt(state.fetchedAt, now),
     fetchedAt: state.fetchedAt,
+    isRefreshing,
   }
 }

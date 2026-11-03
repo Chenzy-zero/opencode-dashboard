@@ -2,12 +2,13 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 
 import type { PanelView } from '../core/panel-view.ts'
 import type { BallView } from '../core/ball-view.ts'
+import type { BallApi, PanelApi } from '../shared/api.ts'
 
 /**
  * The panel renderer is sandboxed and gets plain data only. All formatting and
  * derivation happens in the Electron-free core, in the main process.
  */
-const panelApi = {
+const panelApi: PanelApi = {
   onView(callback: (view: PanelView) => void): () => void {
     const listener = (_event: IpcRendererEvent, view: PanelView): void => callback(view)
     ipcRenderer.on('panel:view', listener)
@@ -24,14 +25,12 @@ const panelApi = {
 
 contextBridge.exposeInMainWorld('panelApi', panelApi)
 
-export type PanelApi = typeof panelApi
-
 /**
  * The floating ball is a separate window with a separate renderer, but it
  * shares this preload. Everything it needs is a message to the main process or
  * a derived view coming back.
  */
-const ballApi = {
+const ballApi: BallApi = {
   onView(callback: (view: BallView) => void): () => void {
     const listener = (_event: IpcRendererEvent, view: BallView): void => callback(view)
     ipcRenderer.on('ball:view', listener)
@@ -65,5 +64,3 @@ const ballApi = {
 }
 
 contextBridge.exposeInMainWorld('ballApi', ballApi)
-
-export type BallApi = typeof ballApi

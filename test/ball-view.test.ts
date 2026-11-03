@@ -2,28 +2,18 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { deriveBallView } from '../src/core/ball-view.ts'
-import type { UsageResult, UsageSnapshot } from '../src/core/types.ts'
+import type { UsageResult } from '../src/core/types.ts'
+import { MINUTE, NOW, onlineResult } from './support/fixtures.ts'
 
-const MINUTE = 60_000
 const HOUR = 60 * MINUTE
-const NOW = new Date(2026, 10, 2, 17, 4).getTime()
 
+/** The ball's own test data: a countdown of exactly 2 小时 13 分. */
 function online(
   used: { rolling: number; weekly: number; monthly: number },
   limited: Array<'rolling' | 'weekly' | 'monthly'> = [],
   resetsAt = NOW + 2 * HOUR + 13 * MINUTE,
 ): UsageResult {
-  const window = (name: 'rolling' | 'weekly' | 'monthly') => ({
-    percent: used[name],
-    limited: limited.includes(name),
-    resetsAt,
-  })
-  const snapshot: UsageSnapshot = {
-    rolling: window('rolling'),
-    weekly: window('weekly'),
-    monthly: window('monthly'),
-  }
-  return { status: 'online', snapshot, fetchedAt: NOW }
+  return onlineResult(used, { limited, resetsAt, fetchedAt: NOW })
 }
 
 test('the ball shows the 5-hour remaining allowance, its ring fill and the reset countdown', () => {
@@ -72,6 +62,18 @@ test('any rate-limited window turns the ring and number red', () => {
     assert.equal(view.text, '87%')
     assert.equal(view.progress, 87)
   }
+})
+
+test('before the first poll the ball is neutral, not offline', () => {
+  const view = deriveBallView({ state: { status: 'loading' }, now: NOW })
+
+  assert.equal(view.status, 'loading')
+  assert.equal(view.text, '…')
+  assert.equal(view.level, 'muted')
+  assert.equal(view.progress, 0)
+  assert.equal(view.countdown, null)
+  assert.ok(view.tooltip.includes('正在读取'))
+  assert.ok(!view.tooltip.includes('未运行'))
 })
 
 test('non-online states show a gray dash with no arc and no countdown', () => {

@@ -1,14 +1,6 @@
 import type { BallView } from '../../core/ball-view.ts'
+import type { BallApi } from '../../shared/api.ts'
 import './ball.css'
-
-type BallApi = {
-  onView: (callback: (view: BallView) => void) => () => void
-  onResetHitTest: (callback: () => void) => () => void
-  setIgnoreMouse: (ignore: boolean) => void
-  dragStart: () => void
-  dragEnd: () => void
-  showMenu: () => void
-}
 
 const api = (window as unknown as { ballApi?: BallApi }).ballApi
 

@@ -27,3 +27,10 @@ export type UsageResult =
   | { status: 'offline' }
   | { status: 'unauthenticated' }
   | { status: 'error' }
+
+/**
+ * What the shell renders, which includes the moment before the first poll has
+ * settled. `loading` is deliberately not a `UsageResult`: it is not an outcome
+ * of a request, so the adapter can never manufacture it.
+ */
+export type UsageState = UsageResult | { status: 'loading' }

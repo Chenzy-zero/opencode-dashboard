@@ -14,7 +14,7 @@ export type LoginItemStatus = 'not-registered' | 'enabled' | 'requires-approval'
 /** The subset of `app.getLoginItemSettings()` this app depends on. */
 export type LoginItemSettings = {
   openAtLogin: boolean
-  /** macOS only (SMAppService). Absent on Windows and in older Electron. */
+  /** macOS only (SMAppService). Absent in older Electron. */
   status?: LoginItemStatus
 }
 
@@ -43,7 +43,10 @@ export function deriveLoginItemView(
   settings: LoginItemSettings,
   context: LoginItemContext,
 ): LoginItemView {
-  if (context.platform !== 'darwin' && context.platform !== 'win32') {
+  // The first version ships the macOS adapter only. A future platform adapter
+  // can replace this branch; carrying Windows behaviour now would be untested
+  // and outside the spec.
+  if (context.platform !== 'darwin') {
     return { supported: false, checked: false, notice: NOTICE_PLATFORM }
   }
 
@@ -51,10 +54,6 @@ export function deriveLoginItemView(
   // user's login items, so the toggle stays inert until packaging.
   if (!context.packaged) {
     return { supported: false, checked: false, notice: NOTICE_DEV }
-  }
-
-  if (context.platform === 'win32') {
-    return { supported: true, checked: settings.openAtLogin, notice: null }
   }
 
   switch (settings.status) {

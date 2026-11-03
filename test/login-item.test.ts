@@ -76,15 +76,15 @@ test('the dev build never offers to register Electron.app as a login item', () =
   assert.ok(view.notice?.includes('打包'), `expected a packaging hint, got ${view.notice}`)
 })
 
-test('Windows has no SMAppService status, so the requested state is the truth', () => {
+test('the first version ships the macOS adapter only', () => {
   const view = deriveLoginItemView(
     { openAtLogin: true },
     { packaged: true, platform: 'win32' },
   )
 
-  assert.equal(view.supported, true)
-  assert.equal(view.checked, true)
-  assert.equal(view.notice, null)
+  assert.equal(view.supported, false)
+  assert.equal(view.checked, false)
+  assert.ok(view.notice, 'the menu must say why the toggle is inert')
 })
 
 test('an unsupported platform offers no toggle', () => {

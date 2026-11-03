@@ -1,4 +1,5 @@
-import type { UsageResult } from './types.ts'
+import type { UsageSnapshot, UsageState } from './types.ts'
+import { formatUpdatedAt } from './updated-at.ts'
 
 /**
  * Converts the service's "used" percentage into the remaining allowance this
@@ -13,7 +14,7 @@ export function remainingPercent(usedPercent: number): number {
 /** Colour tiers for the menu-bar item. The shell maps these to actual colours. */
 export type TrayLevel = 'ok' | 'warn' | 'crit' | 'muted'
 export type TrayView = {
-  /** Text next to the template icon, e.g. `87%` or `—`. */
+  /** Text next to the template icon, e.g. `87%`, `—` or `…` while loading. */
   text: string
   level: TrayLevel
   tooltip: string
@@ -34,15 +35,59 @@ export function trayLevel(remaining: number, anyLimited: boolean): TrayLevel {
   return 'ok'
 }
 
+/** The 5-hour window is the tray's and the ball's headline number. */
+export type FiveHourSummary = {
+  /** 剩余额度, already rounded and clamped. */
+  remaining: number
+  /** True when any window is rate-limited, not only the 5-hour one. */
+  anyLimited: boolean
+}
+
+/**
+ * The tray and the ball both headline the 5-hour window and both turn red when
+ * any window is rate-limited. One function so the two can never drift apart.
+ */
+export function fiveHourSummary(snapshot: UsageSnapshot): FiveHourSummary {
+  return {
+    remaining: remainingPercent(snapshot.rolling.percent),
+    anyLimited:
+      snapshot.rolling.limited || snapshot.weekly.limited || snapshot.monthly.limited,
+  }
+}
+
+export type TrayViewInput = {
+  state: UsageState
+  now: number
+  /** Kept across failures so the tooltip can still say how old the data is. */
+  lastFetchedAt: number | null
+}
+
+function withUpdatedAt(text: string, fetchedAt: number | null, now: number): string {
+  return fetchedAt === null ? text : `${text} · ${formatUpdatedAt(fetchedAt, now)}`
+}
+
 /** Derives everything the tray needs from the newest poll result. Pure. */
-export function deriveTrayView(state: UsageResult): TrayView {
-  if (state.status !== 'online') {
-    return { text: '—', level: 'muted', tooltip: failureReason(state.status) }
+export function deriveTrayView(input: TrayViewInput): TrayView {
+  const { state, now } = input
+
+  if (state.status === 'loading') {
+    return {
+      text: '…',
+      level: 'muted',
+      tooltip: withUpdatedAt('正在读取…', input.lastFetchedAt, now),
+    }
   }
 
-  const { rolling, weekly, monthly } = state.snapshot
-  const remaining = remainingPercent(rolling.percent)
-  const anyLimited = rolling.limited || weekly.limited || monthly.limited
+  if (state.status !== 'online') {
+    return {
+      text: '—',
+      level: 'muted',
+      tooltip: withUpdatedAt(failureReason(state.status), input.lastFetchedAt, now),
+    }
+  }
+
+  const { remaining, anyLimited } = fiveHourSummary(state.snapshot)
+  const { weekly, monthly } = state.snapshot
 
   return {
     text: `${remaining}%`,
@@ -51,6 +96,7 @@ export function deriveTrayView(state: UsageResult): TrayView {
       `5 小时窗口 ${remaining}%`,
       `周窗口 ${remainingPercent(weekly.percent)}%`,
       `月窗口 ${remainingPercent(monthly.percent)}%`,
+      formatUpdatedAt(state.fetchedAt, now),
     ].join(' · '),
   }
 }
@@ -66,4 +112,3 @@ export function failureReason(status: 'offline' | 'unauthenticated' | 'error'): 
       return '数据异常'
   }
 }
-

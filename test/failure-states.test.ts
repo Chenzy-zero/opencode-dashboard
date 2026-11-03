@@ -2,21 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { derivePanelView } from '../src/core/panel-view.ts'
-import type { UsageResult, UsageSnapshot } from '../src/core/types.ts'
+import type { UsageResult } from '../src/core/types.ts'
 import { deriveTrayView } from '../src/core/view-model.ts'
-
-const MINUTE = 60_000
-const NOW = new Date(2026, 10, 2, 17, 4).getTime()
-const LAST_SUCCESS = NOW - 5 * MINUTE
-
-function snapshot(used: { rolling: number; weekly: number; monthly: number }): UsageSnapshot {
-  const window = (name: 'rolling' | 'weekly' | 'monthly') => ({
-    percent: used[name],
-    limited: false,
-    resetsAt: NOW + 60 * MINUTE,
-  })
-  return { rolling: window('rolling'), weekly: window('weekly'), monthly: window('monthly') }
-}
+import { LAST_SUCCESS, NOW, onlineResult } from './support/fixtures.ts'
 
 /**
  * One row per failure the user can actually hit. `hintIncludes` is what the
@@ -51,11 +39,15 @@ const FAILURES: ReadonlyArray<{
 
 for (const failure of FAILURES) {
   test(`tray shows a gray dash for ${failure.name}`, () => {
-    const view = deriveTrayView(failure.state)
+    const view = deriveTrayView({ state: failure.state, now: NOW, lastFetchedAt: LAST_SUCCESS })
 
     assert.equal(view.text, '—')
     assert.equal(view.level, 'muted')
     assert.ok(!view.text.includes('%'), 'no stale percentage in the menu bar')
+    assert.ok(
+      view.tooltip.includes('最后更新 5 分钟前'),
+      'the tooltip still says how old the last numbers are',
+    )
   })
 
   test(`panel explains ${failure.name} and offers a retry`, () => {
@@ -83,9 +75,20 @@ for (const failure of FAILURES) {
   })
 }
 
+test('before the first poll the panel does not guess a failure reason', () => {
+  const view = derivePanelView({ state: { status: 'loading' }, now: NOW, lastFetchedAt: null })
+
+  assert.equal(view.status, 'loading')
+  assert.equal(view.rows, null)
+  assert.equal(view.statusText, '正在读取…')
+  assert.equal(view.statusHint, null)
+  assert.equal(view.retryLabel, null, 'retry waits until there is a real result')
+  assert.ok(!view.statusText?.includes('未运行'))
+})
+
 test('a healthy panel has no retry button and no failure hint', () => {
   const view = derivePanelView({
-    state: { status: 'online', snapshot: snapshot({ rolling: 13, weekly: 40, monthly: 62 }), fetchedAt: NOW },
+    state: onlineResult({ rolling: 13, weekly: 40, monthly: 62 }, { fetchedAt: NOW }),
     now: NOW,
     lastFetchedAt: NOW,
   })
@@ -93,7 +96,7 @@ test('a healthy panel has no retry button and no failure hint', () => {
   assert.equal(view.statusText, null)
   assert.equal(view.statusHint, null)
   assert.equal(view.retryLabel, null)
-  assert.deepEqual(view.rows?.map((row) => row.remaining), [87, 60, 38])
+  assert.deepEqual(view.rows?.map((row) => row.percent), [87, 60, 38])
 })
 
 test('未登录 is never described as 离线, and offline never asks the user to sign in', () => {

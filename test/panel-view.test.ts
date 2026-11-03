@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { derivePanelView, formatCountdown } from '../src/core/panel-view.ts'
-import type { UsageResult, UsageSnapshot } from '../src/core/types.ts'
+import type { UsageResult } from '../src/core/types.ts'
+import { NOW, makeSnapshot, onlineResult } from './support/fixtures.ts'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -24,25 +25,13 @@ test('countdown under an hour shows minutes', () => {
   assert.equal(formatCountdown(20_000), '不到 1 分后')
 })
 
-function snapshot(
-  used: { rolling: number; weekly: number; monthly: number },
-  limited: Array<'rolling' | 'weekly' | 'monthly'> = [],
-  resetsAt = 0,
-): UsageSnapshot {
-  const window = (name: 'rolling' | 'weekly' | 'monthly') => ({
-    percent: used[name],
-    limited: limited.includes(name),
-    resetsAt,
-  })
-  return { rolling: window('rolling'), weekly: window('weekly'), monthly: window('monthly') }
-}
-
-const NOW = new Date(2026, 10, 2, 17, 4).getTime()
-
 test('each row combines a countdown with the absolute reset time', () => {
   const resetsAt = new Date(2026, 10, 2, 19, 17).getTime()
   const view = derivePanelView({
-    state: { status: 'online', snapshot: snapshot({ rolling: 13, weekly: 40, monthly: 62 }, [], resetsAt), fetchedAt: NOW },
+    state: onlineResult(
+      { rolling: 13, weekly: 40, monthly: 62 },
+      { resetsAt, fetchedAt: NOW },
+    ),
     now: NOW,
     lastFetchedAt: NOW,
   })
@@ -54,7 +43,7 @@ test('each row combines a countdown with the absolute reset time', () => {
 
 test('rows always follow the 5-hour, weekly, monthly order', () => {
   const view = derivePanelView({
-    state: { status: 'online', snapshot: snapshot({ rolling: 90, weekly: 0, monthly: 50 }), fetchedAt: NOW },
+    state: onlineResult({ rolling: 90, weekly: 0, monthly: 50 }, { fetchedAt: NOW }),
     now: NOW,
     lastFetchedAt: NOW,
   })
@@ -63,21 +52,30 @@ test('rows always follow the 5-hour, weekly, monthly order', () => {
   assert.deepEqual(view.rows?.map((row) => row.name), ['5 小时窗口', '周窗口', '月窗口'])
 })
 
-test('each row shows remaining allowance, not utilization', () => {
+test('each row carries one percentage plus its formatted text', () => {
   const view = derivePanelView({
-    state: { status: 'online', snapshot: snapshot({ rolling: 13, weekly: 12.4, monthly: 100 }), fetchedAt: NOW },
+    state: onlineResult({ rolling: 13, weekly: 12.4, monthly: 100 }, { fetchedAt: NOW }),
     now: NOW,
     lastFetchedAt: NOW,
   })
 
-  assert.deepEqual(view.rows?.map((row) => row.remaining), [87, 88, 0])
-  assert.deepEqual(view.rows?.map((row) => row.remainingText), ['87%', '88%', '0%'])
-  assert.deepEqual(view.rows?.map((row) => row.progress), [87, 88, 0])
+  assert.deepEqual(view.rows?.map((row) => row.percent), [87, 88, 0])
+  assert.deepEqual(view.rows?.map((row) => row.percentText), ['87%', '88%', '0%'])
+  for (const row of view.rows ?? []) {
+    assert.equal(
+      Object.keys(row).filter((key) => key === 'percent' || key === 'percentText').length,
+      2,
+      'no third copy of the same number on a row',
+    )
+  }
 })
 
 test('a rate-limited window is marked, the others are not', () => {
   const view = derivePanelView({
-    state: { status: 'online', snapshot: snapshot({ rolling: 13, weekly: 40, monthly: 62 }, ['weekly']), fetchedAt: NOW },
+    state: onlineResult(
+      { rolling: 13, weekly: 40, monthly: 62 },
+      { limited: ['weekly'], fetchedAt: NOW },
+    ),
     now: NOW,
     lastFetchedAt: NOW,
   })
@@ -103,10 +101,46 @@ test('failure states show no numbers, only the reason and last update', () => {
   })
 })
 
+test('a poll in flight shows the indicator without dropping the numbers', () => {
+  const view = derivePanelView({
+    state: onlineResult({ rolling: 13, weekly: 40, monthly: 62 }, { fetchedAt: NOW }),
+    now: NOW,
+    lastFetchedAt: NOW,
+    isRefreshing: true,
+  })
+
+  assert.equal(view.isRefreshing, true)
+  assert.deepEqual(view.rows?.map((row) => row.percent), [87, 60, 38])
+})
+
+test('isRefreshing defaults to false', () => {
+  const view = derivePanelView({
+    state: onlineResult({ rolling: 13, weekly: 40, monthly: 62 }, { fetchedAt: NOW }),
+    now: NOW,
+    lastFetchedAt: NOW,
+  })
+
+  assert.equal(view.isRefreshing, false)
+})
+
+test('the loading state shows the indicator and no retry', () => {
+  const view = derivePanelView({
+    state: { status: 'loading' },
+    now: NOW,
+    lastFetchedAt: null,
+    isRefreshing: true,
+  })
+
+  assert.equal(view.statusText, '正在读取…')
+  assert.equal(view.rows, null)
+  assert.equal(view.retryLabel, null)
+  assert.equal(view.isRefreshing, true)
+})
+
 test('last update text degrades from just now to minutes and hours', () => {
   const online = (fetchedAt: number) =>
     derivePanelView({
-      state: { status: 'online', snapshot: snapshot({ rolling: 13, weekly: 40, monthly: 62 }), fetchedAt },
+      state: onlineResult({ rolling: 13, weekly: 40, monthly: 62 }, { fetchedAt }),
       now: NOW,
       lastFetchedAt: fetchedAt,
     })
@@ -118,4 +152,12 @@ test('last update text degrades from just now to minutes and hours', () => {
     derivePanelView({ state: { status: 'offline' }, now: NOW, lastFetchedAt: null }).updatedAtText,
     '尚未更新',
   )
+})
+
+// makeSnapshot is exercised through onlineResult above; this keeps the fixture
+// honest about its limited/resetsAt defaults for the other test files.
+test('the shared fixture defaults to no limiting', () => {
+  const snapshot = makeSnapshot({ rolling: 0, weekly: 0, monthly: 0 })
+  assert.equal(snapshot.rolling.limited, false)
+  assert.ok(snapshot.rolling.resetsAt > 0)
 })

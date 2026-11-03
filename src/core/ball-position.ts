@@ -1,13 +1,7 @@
-export type Rect = { x: number; y: number; width: number; height: number }
-export type Size = { width: number; height: number }
-export type Point = { x: number; y: number }
+import { clamp, type Point, type Rect, type Size } from './geometry.ts'
 
 /** Gap between the ball and the work-area corner when it has never been placed. */
 export const DEFAULT_BALL_MARGIN = 16
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
 
 /**
  * Keeps a ball fully inside one display's work area. Coordinates are DIP and

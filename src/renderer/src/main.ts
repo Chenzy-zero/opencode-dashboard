@@ -1,11 +1,6 @@
 import type { PanelView } from '../../core/panel-view.ts'
+import type { PanelApi } from '../../shared/api.ts'
 import './style.css'
-
-type PanelApi = {
-  onView: (callback: (view: PanelView) => void) => () => void
-  hide: () => void
-  retry: () => void
-}
 
 const api = (window as unknown as { panelApi?: PanelApi }).panelApi
 
@@ -20,6 +15,7 @@ const statusElement = mustElement<HTMLDivElement>('#status')
 const statusReasonElement = mustElement<HTMLDivElement>('#status-reason')
 const statusHintElement = mustElement<HTMLParagraphElement>('#status-hint')
 const retryElement = mustElement<HTMLButtonElement>('#retry')
+const refreshingElement = mustElement<HTMLSpanElement>('#refreshing')
 const footerElement = mustElement<HTMLElement>('#footer')
 
 function renderRow(row: NonNullable<PanelView['rows']>[number]): HTMLElement {
@@ -44,14 +40,14 @@ function renderRow(row: NonNullable<PanelView['rows']>[number]): HTMLElement {
 
   const remaining = document.createElement('span')
   remaining.className = 'row-remaining'
-  remaining.textContent = row.remainingText
+  remaining.textContent = row.percentText
   head.append(remaining)
 
   const bar = document.createElement('div')
   bar.className = 'bar'
   const fill = document.createElement('div')
   fill.className = 'bar-fill'
-  fill.style.width = `${row.progress}%`
+  fill.style.width = `${row.percent}%`
   bar.append(fill)
 
   const reset = document.createElement('div')
@@ -64,6 +60,8 @@ function renderRow(row: NonNullable<PanelView['rows']>[number]): HTMLElement {
 
 function render(view: PanelView): void {
   document.body.dataset['status'] = view.status
+  // Always in the DOM, only faded in: the header never reflows mid-refresh.
+  refreshingElement.dataset['active'] = String(view.isRefreshing)
 
   if (view.rows) {
     rowsElement.replaceChildren(...view.rows.map(renderRow))
@@ -76,7 +74,8 @@ function render(view: PanelView): void {
     rowsElement.replaceChildren()
     rowsElement.hidden = true
     statusElement.hidden = false
-    statusReasonElement.textContent = view.statusText ?? '暂时拿不到额度'
+    // Core owns the vocabulary, including the neutral 「正在读取…」 state.
+    statusReasonElement.textContent = view.statusText ?? ''
     statusHintElement.textContent = view.statusHint ?? ''
     statusHintElement.hidden = !view.statusHint
     retryElement.textContent = view.retryLabel ?? ''

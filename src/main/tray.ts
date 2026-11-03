@@ -2,6 +2,7 @@ import { Menu, Tray, nativeImage } from 'electron'
 
 import type { LoginItemView } from '../core/login-item.ts'
 import type { TrayView } from '../core/view-model.ts'
+import { devLog } from './log.ts'
 import { trayMenuTemplate } from './tray-menu.ts'
 
 /**
@@ -72,7 +73,7 @@ export function createTray(handlers: TrayHandlers): Tray {
     openMenu = buildMenu()
     tray.popUpContextMenu(openMenu)
   })
-  console.log('[tray] click toggles the detail panel; right click opens the menu')
+  devLog('[tray] click toggles the detail panel; right click opens the menu')
 
   return tray
 }
